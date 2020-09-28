@@ -36,7 +36,7 @@ void reconnect(){
 
     if (client.connect(clientId.c_str())){
       Serial.println("connected!");
-      client.subscribe("relaytestj");
+      client.subscribe("relay-test");
     } else {
       Serial.print("failed, rc=");
       Serial.print(client.state());
@@ -52,10 +52,19 @@ void callback(char *topic, byte *payload, signed int length){
     Serial.print((char)payload[i]);
   }
   Serial.println();
-  if ((char)payload[0] == '1'){
-    digitalWrite(LED_BUILTIN, LOW);
-  } else{
-    digitalWrite(LED_BUILTIN, HIGH);
+
+  switch ((char)payload[0]) {
+    case '0':
+      digitalWrite(LED_BUILTIN, HIGH);
+      digitalWrite(relayPin, LOW);
+      break;
+    case '1':
+      digitalWrite(LED_BUILTIN, LOW);
+      digitalWrite(relayPin, HIGH);
+      break;
+    default:
+      Serial.println("Unexpected payload received");
+      break;
   }
 }
 
