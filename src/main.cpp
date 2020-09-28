@@ -2,10 +2,10 @@
 #include <ESP8266WiFi.h>
 #include <PubSubClient.h>
 
-const char *ssid = "Jwlan";
-const char *password = "j0407650075";
+const char *ssid = "YOUR-SSID";
+const char *password = "YOUR-PASSWORD";
 const char *mqtt_server = "broker.mqtt-dashboard.com";
-
+ 
 WiFiClient espClient;
 PubSubClient client(espClient);
 unsigned long lastMsg = 0;
