@@ -2,10 +2,12 @@
 #include <ESP8266WiFi.h>
 #include <PubSubClient.h>
 
-const char *ssid = "YOUR-SSID";
-const char *password = "YOUR-PASSWORD";
+const char *ssid = "Jwlan";
+const char *password = "j0407650075";
 const char *mqtt_server = "broker.mqtt-dashboard.com";
- 
+const char *mqtt_topic_interval = "prMzf8FpDKIFvcKJlPKh-G2PMBviTzcv2OkCVb4Ix";
+const char *mqtt_topic_execute_length = "prMzf8FpDKIFvcKJlPKh-G2PMBviTzcv2OkCVb4Ix2";
+
 WiFiClient espClient;
 PubSubClient client(espClient);
 unsigned long lastMsg = 0;
@@ -14,7 +16,12 @@ char msg[MSG_BUFFER_SIZE];
 long int value = 0;
 const int relayPin = D1;
 const int ledPin = D2;
-const long interval = 5000;
+
+long action_interval_previousMillis = 0;
+long action_execute_previousMillis = 0;
+unsigned long int action_interval = 0;
+unsigned long int action_length = 5000;
+bool action_is_executing = false;
 
 void setup_wifi(){
   delay(10);
@@ -36,7 +43,8 @@ void reconnect(){
 
     if (client.connect(clientId.c_str())){
       Serial.println("connected!");
-      client.subscribe("relay-test");
+      client.subscribe(mqtt_topic_interval);
+      client.subscribe(mqtt_topic_execute_length);
     } else {
       Serial.print("failed, rc=");
       Serial.print(client.state());
@@ -46,36 +54,60 @@ void reconnect(){
 }
 
 void callback(char *topic, byte *payload, signed int length){
-  Serial.print("Message arrived: ");
-  Serial.println(topic);
-  for (int i = 0; i < length; i++){
-    Serial.print((char)payload[i]);
-  }
-  Serial.println();
 
-  switch ((char)payload[0]) {
-    case '0':
-      digitalWrite(LED_BUILTIN, HIGH);
-      digitalWrite(relayPin, LOW);
-      break;
-    case '1':
-      digitalWrite(LED_BUILTIN, LOW);
-      digitalWrite(relayPin, HIGH);
-      break;
-    default:
-      Serial.println("Unexpected payload received");
-      break;
+  Serial.println("Message arrived: ");
+  Serial.println(topic);
+
+  bool input_valid = true;
+  char buffer[length];
+  for (int i = 0; i < length; i++){
+    if(isDigit((char)payload[i])){
+      buffer[i] = (char)payload[i];
+      Serial.print(buffer[i]);
+    }else{
+      input_valid = false;
+      Serial.println("Invalid input. New interval is not set.");
+    }
+  }
+
+  if(input_valid){ 
+    if(topic == mqtt_topic_interval){
+      Serial.println("Input was valid. Setting interval.");
+      action_interval = atoi(buffer) * 1000;
+    }else if(topic == mqtt_topic_execute_length){
+      Serial.println("Input was valid. Setting length.");
+      action_length = atoi(buffer) * 1000; 
+    }else{
+      Serial.println("Topic is not configured to set anything.");
+    }
+  }else{
+    input_valid = false;
+    Serial.println("Input didn't pass validation.");
   }
 }
 
-void initRelay(){
+void init_relay(){
   delay(1000);
   pinMode(LED_BUILTIN, OUTPUT); 
   pinMode(relayPin, OUTPUT);  
 }
 
+void execute_action(){
+  Serial.println("Starting action.");
+  digitalWrite(LED_BUILTIN, LOW);
+  digitalWrite(relayPin, HIGH);
+  action_is_executing = true;
+}
+
+void stop_action(){
+  Serial.println("Stop action.");
+  digitalWrite(LED_BUILTIN, HIGH);
+  digitalWrite(relayPin, LOW);
+  action_is_executing = false;
+}
+
 void setup(){
-  initRelay();
+  init_relay();
   Serial.begin(115200);
   setup_wifi();
   client.setServer(mqtt_server, 1883);
@@ -87,4 +119,25 @@ void loop(){
     reconnect();
   }
   client.loop();
+
+  if(action_interval != 0 && action_length != 0){
+    unsigned long currentMillis = millis();
+
+    //start action
+    if (!action_is_executing){
+      if(currentMillis - action_interval_previousMillis > action_interval){
+        execute_action();
+        action_interval_previousMillis = currentMillis;
+        action_execute_previousMillis = currentMillis;
+      }
+    }else{
+      //execute action
+      if(currentMillis - action_execute_previousMillis > action_length){   
+        stop_action();
+        action_interval_previousMillis = currentMillis;
+        action_execute_previousMillis = currentMillis;
+      }
+    }
+  }
 }
+
